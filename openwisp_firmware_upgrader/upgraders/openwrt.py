@@ -4,6 +4,7 @@ from hashlib import sha256
 from time import sleep
 
 from billiard import Process
+from django.utils.translation import gettext_lazy as _
 from paramiko.ssh_exception import NoValidConnectionsError
 
 from openwisp_controller.connection.connectors.openwrt.ssh import OpenWrt as BaseOpenWrt
@@ -52,7 +53,7 @@ class OpenWrt(BaseOpenWrt):
         result = self.connection.connect()
         if not result:
             raise RecoverableFailure('Connection failed')
-        self.log('Connection successful, starting upgrade...')
+        self.log(_('Connection successful, starting upgrade...'))
 
     def upload(self, *args, **kwargs):
         try:
@@ -81,11 +82,11 @@ class OpenWrt(BaseOpenWrt):
             f'test -f {self.CHECKSUM_FILE}', exit_codes=[0, 1]
         )
         if exit_code == 0:
-            self.log('Image checksum file found', save=False)
+            self.log(_('Image checksum file found', save=False))
             cat = f'cat {self.CHECKSUM_FILE}'
             output, code = self.exec_command(cat)
             if checksum == output:
-                message = (
+                message = _(
                     'Firmware already upgraded previously. '
                     'Identical checksum found in the filesystem, '
                     'upgrade not needed.'
@@ -95,13 +96,17 @@ class OpenWrt(BaseOpenWrt):
                 raise UpgradeNotNeeded(message)
             else:
                 self.log(
-                    'Checksum different, proceeding with '
-                    'the upload of the new image...'
+                    _(
+                        'Checksum different, proceeding with '
+                        'the upload of the new image...'
+                    )
                 )
         else:
             self.log(
-                'Image checksum file not found, proceeding '
-                'with the upload of the new image...'
+                _(
+                    'Image checksum file not found, proceeding '
+                    'with the upload of the new image...'
+                )
             )
         return checksum
 
@@ -109,12 +114,14 @@ class OpenWrt(BaseOpenWrt):
         try:
             self.exec_command(f'sysupgrade --test {path}')
         except Exception as e:
-            self.log(str(e), save=False)
+            self.log(_(str(e), save=False))
             self.disconnect()
             raise UpgradeAborted()
         self.log(
-            'Sysupgrade test passed successfully, '
-            'proceeding with the upgrade operation...'
+            _(
+                'Sysupgrade test passed successfully, '
+                'proceeding with the upgrade operation...'
+            )
         )
 
     def _reflash(self, path):
@@ -136,11 +143,13 @@ class OpenWrt(BaseOpenWrt):
 
         subprocess = Process(target=upgrade, args=[self, path, self.UPGRADE_TIMEOUT])
         subprocess.start()
-        self.log('Upgrade operation in progress...')
+        self.log(_('Upgrade operation in progress...'))
         subprocess.join(timeout=self.UPGRADE_TIMEOUT)
         self.log(
-            f'SSH connection closed, will wait {self.RECONNECT_DELAY} seconds before '
-            'attempting to reconnect...'
+            _(
+                f'SSH connection closed, will wait {self.RECONNECT_DELAY} seconds before '
+                'attempting to reconnect...'
+            )
         )
         sleep(self.RECONNECT_DELAY)
         # kill the subprocess if it has hanged
@@ -161,24 +170,28 @@ class OpenWrt(BaseOpenWrt):
             self._refresh_addresses()
             addresses = ', '.join(self.addresses)
             self.log(
-                f'Trying to reconnect to device at {addresses} (attempt n.{attempt})...',
-                save=False,
+                _(
+                    f'Trying to reconnect to device at {addresses} (attempt n.{attempt})...',
+                    save=False,
+                )
             )
             try:
                 self.connect()
             except (NoValidConnectionsError, socket.timeout):
                 self.log(
-                    'Device not reachable yet, '
-                    f'retrying in {self.RECONNECT_RETRY_DELAY} seconds...'
+                    _(
+                        'Device not reachable yet, '
+                        f'retrying in {self.RECONNECT_RETRY_DELAY} seconds...'
+                    )
                 )
                 sleep(self.RECONNECT_RETRY_DELAY)
                 continue
-            self.log('Connected! Writing checksum ' f'file to {self.CHECKSUM_FILE}')
+            self.log(_('Connected! Writing checksum ' f'file to {self.CHECKSUM_FILE}'))
             checksum_dir = os.path.dirname(self.CHECKSUM_FILE)
             self.exec_command(f'mkdir -p {checksum_dir}')
             self.exec_command(f'echo {checksum} > {self.CHECKSUM_FILE}')
             self.disconnect()
-            self.log('Upgrade completed successfully.')
+            self.log(_('Upgrade completed successfully.'))
             return
         # if all previous attempts failed
         raise ReconnectionFailed(
